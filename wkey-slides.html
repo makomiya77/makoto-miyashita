@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WKEY取引メカニズム最適化</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    background: #0a0e1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 40px 20px;
+  }
+
+  .slide {
+    width: 960px;
+    min-height: 540px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    position: relative;
+  }
+
+  /* ===== SLIDE 1 ===== */
+  .slide1 {
+    background: linear-gradient(135deg, #0d1b3e 0%, #1a2a5e 50%, #0d1b3e 100%);
+  }
+
+  .slide1 .header {
+    background: linear-gradient(90deg, #1e3a7e, #2563eb);
+    padding: 28px 48px;
+    border-bottom: 3px solid #3b82f6;
+  }
+
+  .slide1 .header .tag {
+    display: inline-block;
+    background: rgba(59,130,246,0.3);
+    border: 1px solid #3b82f6;
+    color: #93c5fd;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .slide1 .header h1 {
+    color: #ffffff;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+
+  .slide1 .header h1 span {
+    color: #60a5fa;
+  }
+
+  .slide1 .header .subtitle {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-top: 6px;
+  }
+
+  .slide1 .body {
+    padding: 32px 48px;
+    display: flex;
+    gap: 28px;
+  }
+
+  .mechanism-card {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mechanism-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .card-turbo::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .card-protect::before { background: linear-gradient(90deg, #10b981, #34d399); }
+
+  .card-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+    margin-bottom: 14px;
+  }
+
+  .card-turbo .card-number { background: rgba(245,158,11,0.2); color: #fbbf24; border: 2px solid #f59e0b; }
+  .card-protect .card-number { background: rgba(16,185,129,0.2); color: #34d399; border: 2px solid #10b981; }
+
+  .card-title {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+
+  .card-turbo .card-title span { color: #fbbf24; }
+  .card-protect .card-title span { color: #34d399; }
+
+  .info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .info-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .card-turbo .info-label { background: rgba(245,158,11,0.2); color: #fbbf24; }
+  .card-protect .info-label { background: rgba(16,185,129,0.2); color: #34d399; }
+
+  .info-text {
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .highlight-box {
+    margin-top: 14px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+
+  .highlight-box strong { color: #e2e8f0; }
+
+  .fee-breakdown {
+    margin-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 10px;
+  }
+
+  .fee-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  .fee-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-gov { background: #3b82f6; }
+  .dot-burn { background: #ef4444; }
+
+  /* ===== SLIDE 2 ===== */
+  .slide2 {
+    background: linear-gradient(135deg, #0d1b3e 0%, #1a2a5e 50%, #0d1b3e 100%);
+    min-height: 400px;
+  }
+
+  .slide2 .header {
+    background: linear-gradient(90deg, #1e3a7e, #2563eb);
+    padding: 24px 48px;
+    border-bottom: 3px solid #3b82f6;
+  }
+
+  .slide2 .header h2 {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .slide2 .header h2 span { color: #60a5fa; }
+
+  .slide2 .body {
+    padding: 32px 48px;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .pillar {
+    flex: 1;
+    text-align: center;
+  }
+
+  .pillar-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    margin: 0 auto 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  .pillar:nth-child(1) .pillar-icon { background: rgba(99,102,241,0.2); border: 2px solid #6366f1; }
+  .pillar:nth-child(2) .pillar-icon { background: rgba(239,68,68,0.2); border: 2px solid #ef4444; }
+  .pillar:nth-child(3) .pillar-icon { background: rgba(245,158,11,0.2); border: 2px solid #f59e0b; }
+
+  .pillar-title {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .pillar-desc {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .divider-arrow {
+    color: #334155;
+    font-size: 28px;
+    padding-top: 32px;
+    flex-shrink: 0;
+  }
+
+  .burn-stat {
+    margin-top: 28px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 24px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .burn-stat-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 48px;
+  }
+
+  .stat-item { text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  .stat-label { font-size: 11px; color: #64748b; }
+  .stat-arrow { font-size: 28px; color: #ef4444; }
+  .val-start { color: #94a3b8; }
+  .val-end { color: #ef4444; }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1 -->
+<div class="slide slide1">
+  <div class="header">
+    <div class="tag">WebKey Foundation</div>
+    <h1>WKEY <span>取引メカニズム最適化</span></h1>
+    <div class="subtitle">トークン価値の安定化 &amp; コミュニティ活性化に向けた2つの新機能</div>
+  </div>
+  <div class="body">
+
+    <!-- Card 1 -->
+    <div class="mechanism-card card-turbo">
+      <div class="card-number">1</div>
+      <div class="card-title">ターボ取引<span>リベート</span>（還元）</div>
+
+      <div class="info-row">
+        <div class="info-label">内容</div>
+        <div class="info-text">ターボ取引で消費されたWKEYの<strong style="color:#fbbf24">10%</strong>を参加ユーザーへ還元</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">目的</div>
+        <div class="info-text">長期保有を促し、コミュニティ全体の安定性を向上</div>
+      </div>
+
+      <div class="highlight-box">
+        💡 このシステム発動により、<strong>多くのユーザーがWKEYを保有</strong>するきっかけになります
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="mechanism-card card-protect">
+      <div class="card-number">2</div>
+      <div class="card-title">価格保護メカニズム<br><span>（自動手数料調整）</span></div>
+
+      <div class="info-row">
+        <div class="info-label">内容</div>
+        <div class="info-text">価格下落に応じて <strong style="color:#34d399">5%〜30%</strong> の保護手数料が自動発動</div>
+      </div>
+
+      <div class="fee-breakdown">
+        <div class="fee-item">
+          <div class="fee-dot dot-gov"></div>
+          <span><strong style="color:#93c5fd">5%分：</strong> エコシステムの運営・ガバナンスへ充当</span>
+        </div>
+        <div class="fee-item">
+          <div class="fee-dot dot-burn"></div>
+          <span><strong style="color:#fca5a5">5%超の分：</strong> 全額バーン（永久消滅）</span>
+        </div>
+      </div>
+
+      <div class="info-row" style="margin-top:10px">
+        <div class="info-label">目的</div>
+        <div class="info-text">流通量削減（デフレ化）により急落を防ぎ、価値を保護</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SLIDE 2 -->
+<div class="slide slide2">
+  <div class="header">
+    <h2>今後の方向性 &amp; <span>バーン計画</span></h2>
+  </div>
+  <div class="body" style="flex-direction: column;">
+
+    <div style="display:flex; gap:24px; align-items:flex-start; width:100%">
+      <div class="pillar">
+        <div class="pillar-icon">⚙️</div>
+        <div class="pillar-title">運営体制の最適化</div>
+        <div class="pillar-desc">ガバナンス強化と持続可能な組織運営体制の構築</div>
+      </div>
+      <div class="divider-arrow">›</div>
+      <div class="pillar">
+        <div class="pillar-icon">🔥</div>
+        <div class="pillar-title">デフレ構造の構築</div>
+        <div class="pillar-desc">自動バーンにより流通量を継続的に削減し、希少性を高める</div>
+      </div>
+      <div class="divider-arrow">›</div>
+      <div class="pillar">
+        <div class="pillar-icon">🏆</div>
+        <div class="pillar-title">長期インセンティブ設計</div>
+        <div class="pillar-desc">保有・参加を促す報酬体系でコミュニティを継続的に拡大</div>
+      </div>
+    </div>
+
+    <div class="burn-stat" style="width:100%">
+      <div style="font-size:12px; color:#64748b; margin-bottom:16px; letter-spacing:1px; text-transform:uppercase;">バーン計画（総発行枚数）</div>
+      <div class="burn-stat-row">
+        <div class="stat-item">
+          <div class="stat-value val-start">9,450<span style="font-size:16px">万枚</span></div>
+          <div class="stat-label">現在の発行枚数</div>
+        </div>
+        <div class="stat-arrow">→ 🔥 →</div>
+        <div class="stat-item">
+          <div class="stat-value val-end">2,100<span style="font-size:16px">万枚</span></div>
+          <div class="stat-label">目標（バーン後）</div>
+        </div>
+        <div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:10px 20px; text-align:center">
+          <div style="font-size:22px; font-weight:800; color:#ef4444;">約 <span>78%</span> 削減</div>
+          <div style="font-size:11px; color:#64748b; margin-top:2px;">7,350万枚をバーン予定</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
